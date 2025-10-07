@@ -1,6 +1,6 @@
 # 🌍 Tankas App
 
-A FastAPI-based backend for the Cleanup Warriors application - a community-driven platform for reporting and resolving environmental cleanup issues with gamification features.
+A FastAPI-based backend for the Tankas App application - a community-driven platform for reporting and resolving environmental cleanup issues with gamification features.
 
 ## 📋 Table of Contents
 
