@@ -41,7 +41,7 @@ A FastAPI-based backend for the Tankas App application - a community-driven plat
 ## 📁 Project Structure
 
 ```
-cleanup-warriors-backend/
+tankas_app-api/
 │
 ├── app/
 │   ├── __init__.py
