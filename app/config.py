@@ -17,6 +17,15 @@ class Settings(BaseSettings):
     max_file_size: int = 5242880
     allowed_extensions: List[str] = ["jpg", "jpeg", "png", "webp"]
 
+    # Storage Provider (local or cloudinary)
+    use_cloudinary: bool = True
+    
+    # Cloudinary Configuration
+    cloudinary_cloud_name: str = ""
+    cloudinary_api_key: str = ""
+    cloudinary_api_secret: str = ""
+    cloudinary_folder: str = "tankas_app"  # Folder name in Cloudinary
+
     # CORS
     allowed_origins: List[str] = [
     "http://localhost:3000",      # React (if you had React)

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+# from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import os
 
@@ -13,8 +13,9 @@ async def lifespan(app: FastAPI):
     # Startup
     await connect_to_mongo()
     
-    # Create uploads directory if it doesn't exist
-    os.makedirs(settings.upload_dir, exist_ok=True)
+   # Only create uploads directory if using local storage
+    if not settings.use_cloudinary:
+        os.makedirs(settings.upload_dir, exist_ok=True)
     
     yield
     
@@ -38,7 +39,7 @@ app.add_middleware(
 )
 
 # Mount static files (uploads)
-app.mount(f"/{settings.upload_dir}", StaticFiles(directory=settings.upload_dir), name="uploads")
+# app.mount(f"/{settings.upload_dir}", StaticFiles(directory=settings.upload_dir), name="uploads")
 
 # Include routers
 app.include_router(auth.router)
@@ -51,7 +52,7 @@ app.include_router(rewards.router)
 @app.get("/")
 async def root():
     return {
-        "message": "Welcome to Cleanup Warriors API",
+        "message": "Welcome to Tankas App API",
         "version": "1.0.0",
         "docs": "/docs"
     }

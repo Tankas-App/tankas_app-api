@@ -10,3 +10,4 @@ python-dotenv==1.0.1
 pydantic-settings
 Pillow
 python-multipart
+cloudinary==1.36.0 
