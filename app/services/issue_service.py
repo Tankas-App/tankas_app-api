@@ -8,6 +8,7 @@ from app.services.location_service import LocationService
 from app.services.storage_service import StorageService
 from app.utils.points_calculator import calculate_points
 from app.models.issue import IssueModel
+from app.utils.exif_helper import extract_gps_from_image
 
 class IssueService:
     def __init__(self, db: AsyncIOMotorDatabase):
@@ -28,14 +29,53 @@ class IssueService:
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         
-        # Validate coordinates
-        if not self.location_service.validate_coordinates(issue_data.latitude, issue_data.longitude):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid coordinates")
-        
-        # Upload picture if provided
-        picture_url = None
+        # Variables for location
+        latitude = issue_data.latitude
+        longitude = issue_data.longitude
+
+        # Read picture once if provided
+        picture_bytes = None
         if picture:
-            picture_url = await self.storage_service.save_upload_file(picture)
+            picture_bytes = await picture.read()
+
+        # If picture is provided and no coordinates given, try to extract from EXIF
+        if picture_bytes and (latitude is None or longitude is None):
+            print(f"No coordinates provided. Attempting to extract GPS from image EXIF...")
+            
+            # Try to extract GPS from EXIF
+            gps_coords = extract_gps_from_image(picture_bytes)
+            
+            if gps_coords:
+                latitude, longitude = gps_coords
+                print(f"GPS extracted from EXIF: Lat={latitude}, Lng={longitude}")
+            else:
+                print(f"No GPS data found in image EXIF")
+            
+        # Validate that we have coordinates (either from form or EXIF)
+        if latitude is None or longitude is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Location required: Either provide coordinates or upload an image with GPS data"
+            )
+
+        # Validate coordinates
+        if not self.location_service.validate_coordinates(latitude, longitude):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"Invalid coordinates: Lat={latitude}, Lng={longitude}"
+            )
+        
+        # Upload picture if provided (we already have the bytes)
+        picture_url = None
+        if picture_bytes:
+            # We need to upload the bytes to Cloudinary
+            # But storage_service expects UploadFile, so we need to modify it
+            picture_url = await self.storage_service.save_upload_file_bytes(picture_bytes, picture.filename)
+        
+        # # Upload picture if provided
+        # picture_url = None
+        # if picture:
+        #     picture_url = await self.storage_service.save_upload_file(picture)
         
         # Calculate points
         points = calculate_points(issue_data.difficulty, issue_data.priority)
@@ -45,7 +85,7 @@ class IssueService:
             "user_id": str(user["_id"]),
             "title": issue_data.title,
             "description": issue_data.description,
-            "location": self.location_service.create_geojson(issue_data.latitude, issue_data.longitude),
+            "location": self.location_service.create_geojson(latitude, longitude),
             "picture_url": picture_url,
             "priority": issue_data.priority,
             "difficulty": issue_data.difficulty,

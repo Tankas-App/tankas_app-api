@@ -32,6 +32,21 @@ class StorageService:
         
         # Read file
         file_bytes = await upload_file.read()
+
+        return await StorageService.save_upload_file_bytes(file_bytes, upload_file.filename)
+    
+
+    @staticmethod
+    async def save_upload_file_bytes(file_bytes: bytes, filename: str) -> str:
+        """Save file bytes to Cloudinary and return URL"""
+        
+        # Validate file extension
+        file_ext = filename.split('.')[-1].lower()
+        if file_ext not in settings.allowed_extensions:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"File type not allowed. Allowed: {settings.allowed_extensions}"
+            )
         
         # Validate file size
         if len(file_bytes) > settings.max_file_size:
@@ -72,16 +87,54 @@ class StorageService:
                 status_code=500, 
                 detail=f"Failed to upload image: {str(e)}"
             )
+        
+        # # Validate file size
+        # if len(file_bytes) > settings.max_file_size:
+        #     raise HTTPException(
+        #         status_code=400, 
+        #         detail=f"File too large. Max size: {settings.max_file_size} bytes"
+        #     )
+        
+        # # Validate image
+        # if not validate_image(file_bytes):
+        #     raise HTTPException(status_code=400, detail="Invalid image file")
+        
+        # # Compress image
+        # compressed_bytes = compress_image(file_bytes)
+        
+        # # Generate unique public_id
+        # unique_id = f"{uuid.uuid4()}"
+        
+        # try:
+        #     # Upload to Cloudinary
+        #     upload_result = cloudinary.uploader.upload(
+        #         io.BytesIO(compressed_bytes),
+        #         folder=settings.cloudinary_folder,
+        #         public_id=unique_id,
+        #         resource_type="image",
+        #         format="jpg",
+        #         transformation=[
+        #             {'width': 1920, 'height': 1080, 'crop': 'limit'},
+        #             {'quality': 'auto:good'}
+        #         ]
+        #     )
+            
+        #     # Return the secure URL
+        #     return upload_result['secure_url']
+            
+        # except Exception as e:
+        #     raise HTTPException(
+        #         status_code=500, 
+        #         detail=f"Failed to upload image: {str(e)}"
+        #     )
     
     @staticmethod
     def delete_file(file_url: str):
         """Delete file from Cloudinary"""
         try:
             # Extract public_id from URL
-            # URL format: https://res.cloudinary.com/{cloud_name}/image/upload/v{version}/{folder}/{public_id}.jpg
             if 'cloudinary.com' in file_url:
                 parts = file_url.split('/')
-                # Get the last part and remove extension
                 public_id_with_ext = parts[-1]
                 public_id = public_id_with_ext.rsplit('.', 1)[0]
                 
@@ -92,7 +145,7 @@ class StorageService:
                 cloudinary.uploader.destroy(full_public_id, resource_type="image")
         except Exception as e:
             print(f"Failed to delete image from Cloudinary: {str(e)}")
-            pass  # Silently fail if deletion fails
+            pass
 
 # class StorageService:
 #     @staticmethod

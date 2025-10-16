@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, UploadFile, Form, Query
+from fastapi import APIRouter, Depends, File, UploadFile, Form, Query, HTTPException
 from typing import List, Optional
 from app.schemas.issue import IssueCreate, IssueUpdate, IssueResponse, CommentCreate
 from app.services.issue_service import IssueService
@@ -21,19 +21,42 @@ async def get_all_issues(
 async def create_issue(
     title: str = Form(...),
     description: str = Form(...),
-    latitude: float = Form(...),
-    longitude: float = Form(...),
+    latitude: str = Form(""),
+    longitude: str = Form(""),
     priority: str = Form("medium"),
     difficulty: str = Form("medium"),
     picture: Optional[UploadFile] = File(None),
     current_user: str = Depends(get_current_user),
     db = Depends(get_database)
 ):
+    
+    # Convert empty strings to None, otherwise parse as float
+    lat = None
+    lng = None
+    
+    # Parse latitude
+    if latitude and latitude.strip():
+        try:
+            lat = float(latitude)
+            if not (-90 <= lat <= 90):
+                raise HTTPException(status_code=400, detail="Latitude must be between -90 and 90")
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid latitude value: {latitude}")
+    
+    # Parse longitude
+    if longitude and longitude.strip():
+        try:
+            lng = float(longitude)
+            if not (-180 <= lng <= 180):
+                raise HTTPException(status_code=400, detail="Longitude must be between -180 and 180")
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid longitude value: {longitude}")
+
     issue_data = IssueCreate(
         title=title,
         description=description,
-        latitude=latitude,
-        longitude=longitude,
+        latitude=lat,
+        longitude=lng,
         priority=priority,
         difficulty=difficulty
     )
