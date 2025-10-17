@@ -1,5 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo import ASCENDING, GEOSPHERE
+from pymongo import ASCENDING, GEOSPHERE, DESCENDING
 from app.config import settings
 
 
@@ -17,6 +17,15 @@ async def connect_to_mongo():
     await database.users.create_index([("email", ASCENDING)], unique=True)
     await database.issues.create_index([("location", GEOSPHERE)])
     await database.issues.create_index([("status", ASCENDING)])
+    await database.volunteers.create_index([("issue_id", ASCENDING), ("user_id", ASCENDING)], unique=True, partialFilterExpression={"status": "active"})
+    await database.volunteers.create_index([("issue_id", ASCENDING), ("status", ASCENDING), ("volunteered_at", DESCENDING)])
+    await database.pledges.create_index([("issue_id", ASCENDING), ("status", ASCENDING), ("created_at", DESCENDING)])
+    await database.pledges.create_index([("pledger_id", ASCENDING)])
+    await database.rewards.create_index([("available", DESCENDING), ("points_required", ASCENDING)])
+    await database.rewards.create_index([("name", ASCENDING)])
+    await database.redemptions.create_index([("user_id", ASCENDING), ("redeemed_at", DESCENDING)])
+    await database.redemptions.create_index([("reward_id", ASCENDING)])
+
     print("Connected to MongoDB")
 
 async def close_mongo_connection():

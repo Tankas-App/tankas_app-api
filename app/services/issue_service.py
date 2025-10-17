@@ -188,7 +188,26 @@ class IssueService:
                 }
             }
         )
+
+        # Award points to resolver
+        await self.users_collection.update_one(
+            {"_id": user["_id"]},
+            {
+                "$inc": {
+                    "points": issue["points_assigned"],
+                    "tasks_completed": 1,
+                    "areas_cleaned": 1
+                }
+            }
+        )
         
+        # 🆕 DISTRIBUTE PLEDGES TO RESOLVER
+        from app.services.pledge_service import PledgeService
+        pledge_service = PledgeService(self.db)
+        pledge_distribution = await pledge_service.distribute_pledges(issue_id, user["_id"])
+        
+        print(f"✅ Distributed pledges: {pledge_distribution}")
+            
         return await self.get_issue_by_id(issue_id)
     
     async def add_comment(self, issue_id: str, comment_data: CommentCreate, username: str) -> IssueResponse:
