@@ -6,7 +6,7 @@ import os
 
 from app.config import settings
 from app.core.database import connect_to_mongo, close_mongo_connection
-from app.api.routes import auth, users, warriors, issues, events, rewards
+from app.api.routes import auth, users, warriors, issues, events, rewards, volunteers, pledges
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,6 +48,8 @@ app.include_router(warriors.router)
 app.include_router(issues.router)
 app.include_router(events.router)
 app.include_router(rewards.router)
+app.include_router(volunteers.router)
+app.include_router(pledges.router)
 
 @app.get("/")
 async def root():
