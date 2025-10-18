@@ -30,6 +30,9 @@ class IssueModel(BaseModel):
     comments: List[CommentModel] = []
     resolved_by: Optional[PyObjectId] = None
     resolved_at: Optional[datetime] = None
+    resolution_picture_url: Optional[str] = None
+    resolution_location: Optional[dict] = None  # GeoJSON format
+    verification_distance_meters: Optional[float] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now())
     updated_at: datetime = Field(default_factory=lambda: datetime.now())
     

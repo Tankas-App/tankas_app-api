@@ -9,6 +9,7 @@ from app.services.storage_service import StorageService
 from app.utils.points_calculator import calculate_points
 from app.models.issue import IssueModel
 from app.utils.exif_helper import extract_gps_from_image
+from math import radians, sin, cos, sqrt, atan2
 
 class IssueService:
     def __init__(self, db: AsyncIOMotorDatabase):
@@ -17,6 +18,23 @@ class IssueService:
         self.users_collection = db.users
         self.location_service = LocationService()
         self.storage_service = StorageService()
+        # Maximum distance in meters for GPS verification
+        self.MAX_VERIFICATION_DISTANCE = 100
+    
+    def calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """Calculate distance between two GPS coordinates in meters using Haversine formula"""
+        R = 6371000  # Earth's radius in meters
+        
+        lat1_rad = radians(lat1)
+        lat2_rad = radians(lat2)
+        delta_lat = radians(lat2 - lat1)
+        delta_lon = radians(lon2 - lon1)
+        
+        a = sin(delta_lat / 2) ** 2 + cos(lat1_rad) * cos(lat2_rad) * sin(delta_lon / 2) ** 2
+        c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        
+        distance = R * c
+        return distance
     
     async def create_issue(
         self, 
@@ -68,14 +86,7 @@ class IssueService:
         # Upload picture if provided (we already have the bytes)
         picture_url = None
         if picture_bytes:
-            # We need to upload the bytes to Cloudinary
-            # But storage_service expects UploadFile, so we need to modify it
             picture_url = await self.storage_service.save_upload_file_bytes(picture_bytes, picture.filename)
-        
-        # # Upload picture if provided
-        # picture_url = None
-        # if picture:
-        #     picture_url = await self.storage_service.save_upload_file(picture)
         
         # Calculate points
         points = calculate_points(issue_data.difficulty, issue_data.priority)
@@ -152,7 +163,17 @@ class IssueService:
         
         return await self.get_issue_by_id(issue_id)
     
-    async def resolve_issue(self, issue_id: str, username: str) -> IssueResponse:
+    async def resolve_issue(
+        self, 
+        issue_id: str, 
+        username: str,
+        resolution_picture: Optional[UploadFile] = None
+    ) -> IssueResponse:
+        """
+        Resolve an issue with GPS verification
+        - Requires a picture with GPS data
+        - Verifies user is within MAX_VERIFICATION_DISTANCE of original issue location
+        """
         # Get issue
         issue = await self.issues_collection.find_one({"_id": ObjectId(issue_id)})
         if not issue:
@@ -163,8 +184,65 @@ class IssueService:
         
         # Get user
         user = await self.users_collection.find_one({"username": username})
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         
-        # Update issue
+        # Require resolution picture
+        if not resolution_picture:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Resolution picture is required to verify you are at the location"
+            )
+        
+        # Validate file type
+        if not resolution_picture.content_type or not resolution_picture.content_type.startswith('image/'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File must be an image"
+            )
+        
+        # Read picture bytes
+        picture_bytes = await resolution_picture.read()
+        
+        # Extract GPS from resolution picture
+        resolution_gps = extract_gps_from_image(picture_bytes)
+        
+        if not resolution_gps:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Could not extract GPS data from image. Please ensure location services are enabled when taking the photo."
+            )
+        
+        resolution_lat, resolution_lng = resolution_gps
+        
+        # Get original issue location
+        original_lat, original_lng = self.location_service.extract_coordinates(issue["location"])
+        
+        # Calculate distance between locations
+        distance = self.calculate_distance(
+            original_lat,
+            original_lng,
+            resolution_lat,
+            resolution_lng
+        )
+        
+        print(f"GPS Verification: Distance between locations = {distance:.2f}m (max: {self.MAX_VERIFICATION_DISTANCE}m)")
+        
+        # Verify user is within acceptable range
+        if distance > self.MAX_VERIFICATION_DISTANCE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"You must be at the issue location to resolve it. You are {distance:.0f}m away (maximum allowed: {self.MAX_VERIFICATION_DISTANCE}m)"
+            )
+        
+        # Upload resolution picture to Cloudinary
+        resolution_picture_url = await self.storage_service.save_upload_file_bytes(
+            picture_bytes, 
+            resolution_picture.filename,
+            folder="resolutions"
+        )
+        
+        # Update issue with resolution data
         await self.issues_collection.update_one(
             {"_id": ObjectId(issue_id)},
             {
@@ -172,6 +250,9 @@ class IssueService:
                     "status": "resolved",
                     "resolved_by": user["_id"],
                     "resolved_at": datetime.now(),
+                    "resolution_picture_url": resolution_picture_url,
+                    "resolution_location": self.location_service.create_geojson(resolution_lat, resolution_lng),
+                    "verification_distance_meters": round(distance, 2),
                     "updated_at": datetime.now()
                 }
             }
@@ -188,25 +269,14 @@ class IssueService:
                 }
             }
         )
-
-        # Award points to resolver
-        await self.users_collection.update_one(
-            {"_id": user["_id"]},
-            {
-                "$inc": {
-                    "points": issue["points_assigned"],
-                    "tasks_completed": 1,
-                    "areas_cleaned": 1
-                }
-            }
-        )
         
-        # 🆕 DISTRIBUTE PLEDGES TO RESOLVER
+        # Distribute pledges to resolver
         from app.services.pledge_service import PledgeService
         pledge_service = PledgeService(self.db)
         pledge_distribution = await pledge_service.distribute_pledges(issue_id, user["_id"])
         
         print(f"✅ Distributed pledges: {pledge_distribution}")
+        print(f"✅ Issue resolved with GPS verification (distance: {distance:.2f}m)")
             
         return await self.get_issue_by_id(issue_id)
     
@@ -243,6 +313,11 @@ class IssueService:
     def _format_issue_response(self, issue: dict) -> IssueResponse:
         lat, lng = self.location_service.extract_coordinates(issue["location"])
         
+        # Handle resolution location if exists
+        resolution_lat, resolution_lng = None, None
+        if issue.get("resolution_location"):
+            resolution_lat, resolution_lng = self.location_service.extract_coordinates(issue["resolution_location"])
+        
         comments = [
             CommentResponse(
                 user_id=str(comment["user_id"]),
@@ -269,6 +344,10 @@ class IssueService:
             comments=comments,
             resolved_by=str(issue["resolved_by"]) if issue.get("resolved_by") else None,
             resolved_at=issue.get("resolved_at"),
+            resolution_picture_url=issue.get("resolution_picture_url"),
+            resolution_latitude=resolution_lat,
+            resolution_longitude=resolution_lng,
+            verification_distance_meters=issue.get("verification_distance_meters"),
             created_at=issue["created_at"],
             updated_at=issue["updated_at"]
         )
