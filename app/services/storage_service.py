@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import UploadFile, HTTPException
 from app.config import settings
 from app.utils.image_processing import validate_image, compress_image
+from typing import Optional
 
 
 cloudinary.config(
@@ -18,8 +19,10 @@ cloudinary.config(
 )
 
 class StorageService:
-    @staticmethod
-    async def save_upload_file(upload_file: UploadFile) -> str:
+    async def save_upload_file(
+    upload_file: UploadFile,
+    folder: Optional[str] = None  # Add folder parameter
+    ) -> str:
         """Save uploaded file to Cloudinary and return URL"""
         
         # Validate file extension
@@ -33,11 +36,19 @@ class StorageService:
         # Read file
         file_bytes = await upload_file.read()
 
-        return await StorageService.save_upload_file_bytes(file_bytes, upload_file.filename)
+        return await StorageService.save_upload_file_bytes(
+            file_bytes, 
+            upload_file.filename,
+            folder=folder  # Pass folder parameter
+        )
     
 
     @staticmethod
-    async def save_upload_file_bytes(file_bytes: bytes, filename: str) -> str:
+    async def save_upload_file_bytes(
+        file_bytes: bytes, 
+        filename: str,
+        folder: Optional[str] = None  # Add folder parameter
+    ) -> str:
         """Save file bytes to Cloudinary and return URL"""
         
         # Validate file extension
@@ -65,11 +76,14 @@ class StorageService:
         # Generate unique public_id
         unique_id = f"{uuid.uuid4()}"
         
+        # Determine which folder to use
+        upload_folder = folder if folder else settings.cloudinary_folder
+        
         try:
             # Upload to Cloudinary
             upload_result = cloudinary.uploader.upload(
                 io.BytesIO(compressed_bytes),
-                folder=settings.cloudinary_folder,
+                folder=upload_folder,  # Use the determined folder
                 public_id=unique_id,
                 resource_type="image",
                 format="jpg",

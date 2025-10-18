@@ -13,6 +13,7 @@ class IssueCreate(BaseModel):
     longitude: Optional[float] = Field(None, ge=-180, le=180)
     priority: str = "medium"
     difficulty: str = "medium"
+    reward_listing: Optional[str] = None
 
 class IssueUpdate(BaseModel):
     title: Optional[str] = None
@@ -46,5 +47,9 @@ class IssueResponse(BaseModel):
     comments: List[CommentResponse] = []
     resolved_by: Optional[str] = None
     resolved_at: Optional[datetime] = None
+    resolution_picture_url: Optional[str] = None
+    resolution_latitude: Optional[float] = None
+    resolution_longitude: Optional[float] = None
+    verification_distance_meters: Optional[float] = None
     created_at: datetime
     updated_at: datetime

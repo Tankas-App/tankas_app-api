@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, UploadFile, Form, Query, HTTPException
+from fastapi import APIRouter, Depends, File, UploadFile, Form, Query, HTTPException, UploadFile, File, Form
 from typing import List, Optional
 from app.schemas.issue import IssueCreate, IssueUpdate, IssueResponse, CommentCreate
 from app.services.issue_service import IssueService
@@ -84,11 +84,53 @@ async def update_issue(
 @router.post("/{issue_id}/resolve", response_model=IssueResponse)
 async def resolve_issue(
     issue_id: str,
+    resolution_picture: UploadFile = File(..., description="Picture taken at the resolved location with GPS data"),
     current_user: str = Depends(get_current_user),
     db = Depends(get_database)
 ):
+    """
+    Resolve an issue with GPS verification
+    
+    - **issue_id**: The ID of the issue to resolve
+    - **resolution_picture**: Picture with GPS metadata showing the resolved issue
+    
+    The system will:
+    1. Extract GPS coordinates from the uploaded picture
+    2. Compare with the original issue's GPS location
+    3. Only allow resolution if within 100 meters
+    4. Award points to the resolver
+    5. Distribute any pledges
+    
+    **Note**: Location services must be enabled when taking the photo.
+    """
     issue_service = IssueService(db)
-    return await issue_service.resolve_issue(issue_id, current_user)
+    
+    return await issue_service.resolve_issue(
+        issue_id=issue_id,
+        username=current_user,
+        resolution_picture=resolution_picture
+    )
+
+# # If you want to make it optional (for backward compatibility during migration)
+# @router.post("/{issue_id}/resolve-without-verification", response_model=IssueResponse)
+# async def resolve_issue_without_verification(
+#     issue_id: str,
+#     current_user: dict = Depends(get_current_user),
+#     db = Depends(get_database)
+# ):
+#     """
+#     Resolve an issue WITHOUT GPS verification (legacy endpoint)
+    
+#     This endpoint is for backward compatibility. 
+#     The main /resolve endpoint should be used for new resolutions.
+#     """
+#     issue_service = IssueService(db)
+    
+#     return await issue_service.resolve_issue(
+#         issue_id=issue_id,
+#         username=current_user["username"],
+#         resolution_picture=None  # No verification
+#     )
 
 @router.post("/{issue_id}/comments", response_model=IssueResponse)
 async def add_comment(
