@@ -30,8 +30,9 @@ class UserService:
         )
     
     async def update_user(self, username: str, update_data: UserUpdate) -> UserResponse:
+        """Update username and other user fields"""
         update_dict = update_data.model_dump(exclude_unset=True)
-        update_dict["updated_at"] = datetime.utcnow()
+        update_dict["updated_at"] = datetime.now()
         
         result = await self.users_collection.update_one(
             {"username": username},
@@ -39,9 +40,45 @@ class UserService:
         )
         
         if result.matched_count == 0:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
         
         return await self.get_user_by_username(username)
+    
+    async def update_avatar(self, username: str, avatar_url: str) -> UserResponse:
+        """Update only the avatar URL"""
+        result = await self.users_collection.update_one(
+            {"username": username},
+            {
+                "$set": {
+                    "avatar": avatar_url,
+                    "updated_at": datetime.now()
+                }
+            }
+        )
+        
+        if result.matched_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        return await self.get_user_by_username(username)
+    
+    async def get_user_by_username(self, username: str) -> UserResponse:
+        user = await self.users_collection.find_one({"username": username})
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        if "_id" in user:
+            user["id"] = user.pop("_id")
+            
+        return UserResponse(**user)
     
     async def get_dashboard(self, username: str) -> DashboardStats:
         user = await self.users_collection.find_one({"username": username})

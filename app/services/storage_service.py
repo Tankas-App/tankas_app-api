@@ -5,7 +5,7 @@ import cloudinary
 import cloudinary.uploader
 from datetime import datetime
 from pathlib import Path
-from fastapi import UploadFile, HTTPException
+from fastapi import UploadFile, HTTPException, status
 from app.config import settings
 from app.utils.image_processing import validate_image, compress_image
 from typing import Optional
@@ -160,6 +160,27 @@ class StorageService:
         except Exception as e:
             print(f"Failed to delete image from Cloudinary: {str(e)}")
             pass
+
+    async def upload_avatar(self, file) -> str:
+        """Upload avatar to Cloudinary and return the secure URL"""
+        try:
+            result = cloudinary.uploader.upload(
+                file.file,
+                folder="tankas_avatars",
+                resource_type="auto",
+                allowed_formats=["jpg", "jpeg", "png", "gif"],
+                max_bytes=5242880,  # 5MB max
+                transformation=[
+                    {"width": 500, "height": 500, "crop": "fill"},
+                    {"quality": "auto"}
+                ]
+            )
+            return result["secure_url"]
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File upload failed: {str(e)}"
+            )
 
 # class StorageService:
 #     @staticmethod
