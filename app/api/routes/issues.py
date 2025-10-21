@@ -141,3 +141,9 @@ async def add_comment(
 ):
     issue_service = IssueService(db)
     return await issue_service.add_comment(issue_id, comment_data, current_user)
+
+@router.get("/{issue_id}/comments")
+async def get_comments(issue_id: str, db=Depends(get_database)):
+    issue_service = IssueService(db)
+    comments = await issue_service.get_comments(issue_id)
+    return comments
