@@ -295,6 +295,7 @@ class IssueService:
         comment = {
             "user_id": user["_id"],
             "username": user["username"],
+            "avatar": user["avatar"],
             "comment": comment_data.comment,
             "created_at": datetime.now()
         }
@@ -358,11 +359,19 @@ class IssueService:
             raise HTTPException(status_code=404, detail="Issue not found")
         
         comments = issue.get("comments", [])
+        formatted_comments = []
         
         for comment in comments:
-            if "_id" in comment and isinstance(comment["_id"], ObjectId):
-                comment["_id"] = str(comment["_id"])
-            if "user_id" in comment and isinstance(comment["user_id"], ObjectId):
-                comment["user_id"] = str(comment["user_id"])
+            formatted_comment = {
+                "_id": str(comment.get("_id", "")),
+                "user": {
+                    "id": str(comment.get("user_id", "")),
+                    "username": comment.get("username", ""),
+                    "avatar": comment.get("avatar", "")
+                },
+                "content": comment.get("comment", ""),
+                "created_at": comment.get("created_at", "")
+            }
+            formatted_comments.append(formatted_comment)
         
-        return comments
+        return formatted_comments
