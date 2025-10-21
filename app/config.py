@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     # CORS
     allowed_origins: List[str] = [
+    "*",
     "http://localhost:3000",      # React (if you had React)
     "http://localhost:5173",      # Vite (if you had Vite)
     "http://localhost:8080",      # NiceGUI default port

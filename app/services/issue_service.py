@@ -351,3 +351,18 @@ class IssueService:
             created_at=issue["created_at"],
             updated_at=issue["updated_at"]
         )
+    
+    async def get_comments(self, issue_id: str):
+        issue = await self.issues_collection.find_one({"_id": ObjectId(issue_id)})
+        if not issue:
+            raise HTTPException(status_code=404, detail="Issue not found")
+        
+        comments = issue.get("comments", [])
+        
+        for comment in comments:
+            if "_id" in comment and isinstance(comment["_id"], ObjectId):
+                comment["_id"] = str(comment["_id"])
+            if "user_id" in comment and isinstance(comment["user_id"], ObjectId):
+                comment["user_id"] = str(comment["user_id"])
+        
+        return comments
